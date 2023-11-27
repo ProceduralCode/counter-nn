@@ -22,6 +22,7 @@ class Dataset:
 						metadata[img] = []
 					point_data = eval(row[5])
 					metadata[img].append((point_data['cx'], point_data['cy']))
+		print(' '*50, end='\r')
 		metadata = [(k, v) for k, v in metadata.items()]
 		np.random.shuffle(metadata)
 		split_idx = int(len(metadata) * test_size)
@@ -47,16 +48,33 @@ class Dataset:
 		# 	img = np.rot90(img, rotate)
 		return img
 
-def show_img(img):
+def show_img(img, points=None, heatmap=None):
+	img = img.copy()
+	if points is not None:
+		for x, y in points:
+			cv2.line(img, (x-5, y-5), (x+5, y+5), (0, 0, 255), 1)
+			cv2.line(img, (x+5, y-5), (x-5, y+5), (0, 0, 255), 1)
+	if heatmap is not None:
+		heatmap = heatmap / np.max(heatmap)
+		heatmap = cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET).astype(np.float32) / 255
+		img = cv2.addWeighted(img, 1, heatmap, 0.5, 0)
 	cv2.imshow('image', img)
 	cv2.waitKey(0)
 	cv2.destroyAllWindows()
 
-def main():
+def em():
 	dataset = Dataset(test_size=0.15)
-	for img, count in dataset.iter(train=True):
-		show_img(img)
+	for img, points in dataset.iter(train=True):
+		gauss_heatmap = np.zeros((img.shape[0], img.shape[1]), dtype=np.float32)
+		dot_size = 10
+		for x, y in points:
+			gauss_heatmap[y][x] = 1
+		gauss_heatmap = cv2.GaussianBlur(gauss_heatmap, (dot_size*6-1, dot_size*6-1), dot_size)
+		show_img(img, heatmap=gauss_heatmap)
 		break
+
+def main():
+	em()
 
 if __name__ == '__main__':
 	main()
