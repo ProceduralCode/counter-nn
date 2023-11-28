@@ -1,6 +1,6 @@
-from pooling_layer import Pooling_Layer
-from convolution_layer import Convolution_Layer
-from window import Window
+from .pooling_layer import Pooling_Layer
+from .convolution_layer import Convolution_Layer
+from .window import Window
 def main():
     test_arr = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]]
     filter_arr = [[1, 0, 1], [0, 1, 0], [1, 0, 1]]
@@ -16,5 +16,3 @@ def main():
     print(test_filter)
     print("Convoluted Result")
     print(conv.conv(test_input))
-
-main()

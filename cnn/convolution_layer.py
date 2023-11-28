@@ -1,4 +1,4 @@
-from window import Window
+from .window import Window
 
 class Convolution_Layer:
     def __init__(self, filter, stride):
@@ -18,4 +18,3 @@ class Convolution_Layer:
         output = Window(output)
         output.ReLU
         return output
-    
