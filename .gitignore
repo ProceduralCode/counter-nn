@@ -1,5 +1,6 @@
 # Custom
 data/bee_dataset*
+dm/saves/*
 
 
 # Byte-compiled / optimized / DLL files

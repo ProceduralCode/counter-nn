@@ -1,4 +1,6 @@
 
+import os
+from pathlib import Path
 import numpy as np
 import cv2
 import torch
@@ -58,49 +60,96 @@ class Model(nn.Module):
 		x = F.interpolate(x, scale_factor=4, mode='bilinear', align_corners=False)
 		return x
 
+	def save(self, path, metadata):
+		if not os.path.exists(os.path.dirname(path)):
+			os.makedirs(os.path.dirname(path))
+		state_dict = self.state_dict()
+		state_dict['metadata'] = metadata
+		torch.save(state_dict, path)
+
+	def load(self, path):
+		state_dict = torch.load(path)
+		metadata = state_dict.pop('metadata')
+		self.load_state_dict(state_dict)
+		return metadata
+
 def main():
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 	model = Model().to(device)
 	dataset = Dataset(test_size=0.15)
-	for epoch in range(100):
-		model.eval()
-		model.zero_grad()
-		losses = []
-		for i, (imgs, pointss) in enumerate(dataset.iter(train=True)):
+	learning_rate = 0.01
 
-			# Construct heatmap
-			gauss_heatmaps = []
-			for img, points in zip(imgs, pointss):
-				gauss_heatmap = np.zeros((img.shape[0], img.shape[1]), dtype=np.float32)
-				dot_size = 10
-				for x, y in points:
-					gauss_heatmap[y-1][x-1] = 1
-				gauss_heatmap = cv2.GaussianBlur(gauss_heatmap, (dot_size*6-1, dot_size*6-1), dot_size)
-				gauss_heatmaps.append(gauss_heatmap)
-			gauss_heatmaps = np.stack(gauss_heatmaps)
+	# Load model
+	save_path = 'dm/saves/model.pth'
+	metadata = { 'epochs': [], 'losses': [], 'errors': [], }
+	if os.path.exists(save_path):
+		metadata = model.load(save_path)
 
-			# Forward (predict heatmap)
-			input = torch.from_numpy(imgs).permute(0, 3, 1, 2).to(device)
-			output = model(input)
+	try:
+		while True:
+			# Train
+			model.train()
+			model.zero_grad()
+			losses = []
+			for i, (imgs, pointss) in enumerate(dataset.iter(train=True)):
+				print(f"Training batch {i}", end='\r')
 
-			# Loss
-			gt = torch.from_numpy(gauss_heatmaps).unsqueeze(0).to(device)
-			loss = torch.mean((output - gt)**2)
-			losses.append(loss.item())
+				# Construct heatmap
+				gauss_heatmaps = []
+				for img, points in zip(imgs, pointss):
+					gauss_heatmap = np.zeros((img.shape[0], img.shape[1]), dtype=np.float32)
+					dot_size = 10
+					for x, y in points:
+						gauss_heatmap[y-1][x-1] = 1
+					gauss_heatmap = cv2.GaussianBlur(gauss_heatmap, (dot_size*6-1, dot_size*6-1), dot_size)
+					gauss_heatmaps.append(gauss_heatmap)
+				gauss_heatmaps = np.stack(gauss_heatmaps)
 
-			# Backprop (diff from gt heatmap)
-			learning_rate = 0.01
-			loss.backward()
-			with torch.no_grad():
-				for param in model.parameters():
-					param -= learning_rate * param.grad
+				# Forward (predict heatmap)
+				input = torch.from_numpy(imgs).permute(0, 3, 1, 2).to(device)
+				output = model(input)
 
-			if i == 10:
-				break
+				# Loss
+				gt = torch.from_numpy(gauss_heatmaps).unsqueeze(0).to(device)
+				loss = torch.mean((output - gt)**2)
+				losses.append(loss.item())
 
-		show_img(imgs[0], pointss[0], heatmap=output[0].detach().cpu().permute(1, 2, 0).numpy())
-		show_img(imgs[0], pointss[0], heatmap=gauss_heatmaps[0])
-		show_img(imgs[0], pointss[0])
+				# Backprop (diff from gt heatmap)
+				loss.backward()
+				with torch.no_grad():
+					for param in model.parameters():
+						param -= learning_rate * param.grad
 
-		print('Epoch: {}, Loss: {}'.format(epoch, np.mean(losses)))
-		show_img(imgs[0], heatmap=output[0].detach().cpu().permute(1, 2, 0).numpy())
+				# if i == 50:
+				# 	break
+			print(" "*50, end='\r')
+			loss = np.mean(losses)
+
+			# Test
+			model.eval()
+			errors = []
+			for i, (imgs, pointss) in enumerate(dataset.iter(train=False)):
+				print(f"Testing batch {i}", end='\r')
+				input = torch.from_numpy(imgs).permute(0, 3, 1, 2).to(device)
+				output = model(input)
+				output = output.detach().cpu().permute(0, 2, 3, 1).numpy()
+				counts = np.sum(output, axis=(1, 2, 3))
+				for points, count in zip(pointss, counts):
+					errors.append(np.abs(len(points) - count))
+			print(" "*50, end='\r')
+			error = np.mean(errors)
+
+			# Save
+			epoch = len(metadata['epochs'])
+			print(f'Epoch: {epoch}, Loss: {loss*10e6:.2f}, Error: {error:.2f}')
+			metadata['epochs'].append(epoch)
+			metadata['losses'].append(loss)
+			metadata['errors'].append(error)
+			model.save(save_path, metadata)
+
+	except KeyboardInterrupt:
+		imgs, pointss = next(dataset.iter(train=False))
+		input = torch.from_numpy(imgs).permute(0, 3, 1, 2).to(device)
+		output = model(input)
+		output = output.detach().cpu().permute(0, 2, 3, 1).numpy()
+		show_img(imgs[0], pointss[0], heatmap=output[0])
