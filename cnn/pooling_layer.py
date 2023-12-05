@@ -1,4 +1,4 @@
-from window import Window
+from .window import Window
 
 class Pooling_Layer:
     def __init__(self, section_size, stride):
