@@ -1,16 +1,16 @@
 import random
 import math
 import numpy
-from window import *
+from cnn.window import *
 
 
 LEARNING_RATE = 0.1
 MOMENTUM_FACTOR = 0
-LEAK = 0.1
+LEAK = 0
 BN_SMOOTH = 1
 
 def random_weight(n):
-    return random.random() 
+    return random.random() * 2 - 1
     #return numpy.random.randn() * math.sqrt(2.0 /n)
 def mse_grad(expected, outputs):
     if(len(expected) != len(outputs)):
@@ -97,6 +97,10 @@ def derived_sigmoid(x):
             result.append(derived_sigmoid(x[i]))
         return result
     return sigmoid(x) * (1 - sigmoid(x))
+def normalize(x, rescale, shift):
+    return x#batch_normalization(x, rescale, shift)
+def der_normalize(x, gradients, rescale):
+    return x#derived_batch_norm(x, gradients, rescale)
 def batch_normalization(x, rescale, shift):
     return op(op(get_x_hat(x), rescale, "*"), shift, "+")
 def stdev(x):

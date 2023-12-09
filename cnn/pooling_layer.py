@@ -1,14 +1,15 @@
-from window import *
+from cnn.window import *
 
 class Pooling_Layer:
     def __init__(self, section_size, stride):
         self._section_size = section_size
         self._stride = stride
     def forward(self, input):
-        self._input_size = input.size
         # Pads if needed then max pools 
-        input = input.pad(((input.size - self._section_size) % self._stride))
-        output_size = ((input.size - self._section_size) // self._stride) + 1
+        self._pad = ((input.size - self._section_size) % self._stride)
+        input = input.pad(self._pad)
+        self._input_size = input.size
+        output_size = math.ceil((input.size - self._section_size + 1) / self._stride)
         output = []
         self.max_arr = []
         for i in range(output_size):
@@ -30,7 +31,7 @@ class Pooling_Layer:
             for j in range(len(grad_output[0])):
                 location = self.max_arr[i][j]
                 gradients[location[0]][location[1]] += grad_output[i][j]
-        return Window(gradients)
+        return Window(gradients).unpad(self._pad)
     def display(self):
         print("Section size: ", self._section_size)
         print("Stride: ", self._stride)

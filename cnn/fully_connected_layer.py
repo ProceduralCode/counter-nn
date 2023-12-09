@@ -1,4 +1,4 @@
-from fully_connected_util import *
+from cnn.fully_connected_util import *
 
 class Fully_Connected_Layer:
     def __init__(self, input_size, output_size):

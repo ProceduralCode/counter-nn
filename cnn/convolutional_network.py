@@ -1,4 +1,5 @@
-from window import *
+from cnn.window import *
+import numpy
 
 class Convolutional_Network:
     def __init__(self, conv_pool_layers, mlp):
@@ -7,10 +8,10 @@ class Convolutional_Network:
     def forward(self, input):
         if not isinstance(input, Window):
             if isinstance(input, list) and isinstance(input[0], list) and isinstance(input[0][0], list):
-                if len(input) != len(self._conv_pool_layers):
+                if len(input) != len(self._conv_pool_layers[0]):
                     raise Exception("Invalid input depth")
                 input = [Window(element) for element in input]
-            elif not isinstance(input[0],Window):
+            elif not isinstance(input[0], Window):
                 input = Window(input)
         if isinstance(input, list):
             input = input.copy()
@@ -29,9 +30,9 @@ class Convolutional_Network:
                     input.append(element)
         else:
             input = input.flatten()
-        return self._mlp.forward(input)
+        return self._mlp.forward(input)[0]
     def backward(self, gradient):
-        gradient = self._mlp.backward(gradient)
+        gradient = self._mlp.backward([gradient])
         if isinstance(self._conv_pool_layers[0], list):
             new_grad = []
             depth = len(self._conv_pool_layers[0])
@@ -52,7 +53,12 @@ class Convolutional_Network:
         print("Convolutional Network:")
         for i in range(len(self._conv_pool_layers)):
             print(c_p[i % 2])
-            self._conv_pool_layers[i].display()
+            if isinstance(self._conv_pool_layers[i], list):
+                for layer in self._conv_pool_layers[i]:
+                    print("-----------------------------")
+                    layer.display()
+            else:
+                self._conv_pool_layers[i].display()
         print()
         print("Fully connected layer: ")
         self._mlp.display()

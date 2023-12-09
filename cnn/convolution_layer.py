@@ -1,4 +1,5 @@
-from window import *
+from cnn.window import *
+from cnn.fully_connected_util import random_weight
 import random
 
 LEARNING_RATE = 0.1
@@ -11,7 +12,7 @@ class Convolution_Layer:
             for i in range(filter_size):
                 filter.append([])
                 for j in range(filter_size):
-                    filter[i].append(random_weight())
+                    filter[i].append(random_weight(filter_size ** 2))
         if not isinstance(filter, Window):
             filter = Window(filter)
         if bias == None:
@@ -23,7 +24,7 @@ class Convolution_Layer:
         self._pad = (input.size - self._filter.size) % self._stride
         input = input.pad(self._pad)
         self._last_input = input
-        output_size = ((input.size - self._filter.size) // self._stride) + 1
+        output_size = math.ceil((input.size - self._filter.size + 1) / self._stride)
         output = []
         # Add check to make sure the above is a whole number
         for i in range(output_size):
@@ -35,9 +36,9 @@ class Convolution_Layer:
         return Window(output)
     def forward(self, input):
         self._last_act_input = self.conv(input).add(self._bias)
-        return self._last_act_input.ReLU()
+        return self._last_act_input.copy().activation()
     def backward(self, grad_output):
-        grad_output = self._last_act_input.dReLU().multiply(grad_output)
+        grad_output = self._last_act_input.dactivation().multiply(grad_output)
         grad_filter = Convolution_Layer(grad_output.pad_dilate(0, self._stride - 1), 1).conv(self._last_input)
         grad_filter = grad_filter.multiply(LEARNING_RATE)
         self._filter = self._filter.add(grad_filter)
@@ -49,5 +50,3 @@ class Convolution_Layer:
         print("Bias = ", self._bias)
         print("Filter: ")
         print(self._filter)
-def random_weight():
-    return random.random()

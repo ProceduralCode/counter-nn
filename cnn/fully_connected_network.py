@@ -1,5 +1,5 @@
-from fully_connected_layer import Fully_Connected_Layer
-from fully_connected_util import *
+from cnn.fully_connected_layer import Fully_Connected_Layer
+from cnn.fully_connected_util import *
 
 class Fully_Connected_Network:
     def __init__(self, layer_sizes):
@@ -30,12 +30,9 @@ class Fully_Connected_Network:
         self._act_fun_activations = []
         for i in range(len(self._layers)):
             self._weight_activations.append(self._layers[i].forward(self._border_activations[-1]))
-            self._border_activations.append(activation_function(self._weight_activations[-1]))
-            """
-            self._weight_activations.append(self._layers[i].forward(self._border_activations[-1]))
             self._act_fun_activations.append(activation_function(self._weight_activations[-1]))
-            self._border_activations.append(batch_normalization(self._act_fun_activations[-1], self._bn_rescale[i], self._bn_shift[i]))
-            """
+            self._border_activations.append(normalize(self._act_fun_activations[-1], self._bn_rescale[i], self._bn_shift[i]))
+            
         return self._border_activations[-1]
     def backward(self, output_gradient):
         if not isinstance(output_gradient, list):
@@ -45,13 +42,10 @@ class Fully_Connected_Network:
         act_gradients = []
         # Get gradients
         for i in reversed(range(len(self._layers))):
-            act_gradients.append(op(derived_activation(self._weight_activations[i]), border_gradients[-1], "*"))
-            border_gradients.append(self._layers[i].get_gradient(act_gradients[-1]))
-            """
-            batch_norm_gradients.append(op(derived_batch_norm(self._act_fun_activations[i], border_gradients[-1], self._bn_rescale[i]), border_gradients[-1], "*"))
+            batch_norm_gradients.append(op(der_normalize(self._act_fun_activations[i], border_gradients[-1], self._bn_rescale[i]), border_gradients[-1], "*"))
             act_gradients.append(op(derived_activation(self._weight_activations[i]), batch_norm_gradients[-1], "*"))
             border_gradients.append(self._layers[i].get_gradient(act_gradients[-1]))
-            """
+            
         # Reverse gradients so updating can be done forwards
         batch_norm_gradients.reverse()
         act_gradients.reverse()
@@ -59,7 +53,7 @@ class Fully_Connected_Network:
         # Update perceptron layers
         for i in range(len(self._layers)):
             self._layers[i].update(act_gradients[i], self._border_activations[i])
-            """
+            
         # Update batch normalization vars
         for i in range(len(self._bn_rescale)):
             momentum = op(MOMENTUM_FACTOR, self._prev_bn_rescale_update[i], "*")
@@ -71,7 +65,7 @@ class Fully_Connected_Network:
             current_term = op(LEARNING_RATE, sum(border_gradients[i + 1]), "*")
             self._prev_bn_shift_update[i] = op(momentum, current_term, "+")
         self._bn_shift = op(self._bn_shift, self._prev_bn_shift_update, "-")
-        """
+        
         # Returns gradient of the input
         return sum_columns(border_gradients[0])
     def display(self):

@@ -1,11 +1,15 @@
 import math
-
+import numpy
 BN_SMOOTH = 0.1
-LEAK = 0.1
+LEAK = 0
 
 class Window:
     # Class to hold and manipulate 2d arrays that will be used by the convolutional and pooling layers
     def __init__(self, grid):
+        if isinstance(grid, numpy.ndarray):
+            grid = list(grid)
+            for i in range(len(grid)):
+                grid[i] = list(grid[i])
         self._grid = grid
         self.make_square()
         self.size = len(self._grid)
@@ -35,14 +39,16 @@ class Window:
         return Window(new_grid)
     def make_square(self):
         # Pads with 0s to make the grid square
-        if(len(self._grid) > len(self._grid[0])):
-            for i in range(len(self._grid)):
-                for j in range(len(self._grid) - len(self._grid[0])):
+        len_1 = len(self._grid)
+        len_2 = len(self._grid[0])
+        if(len_1 > len_2):
+            for i in range(len_1):
+                for j in range(len_1 - len_2):
                     self._grid[i].append(0)
-        elif(len(self._grid) < len(self._grid[0])):
-            for i in range(len(self._grid[0]) - len(self._grid)):
+        elif(len_1 < len_2):
+            for i in range(len_2 - len_1):
                 new_row = []
-                for j in range(len(self._grid[0])):
+                for j in range(len_2):
                     new_row.append(0)
                 self._grid.append(new_row)
         return self
@@ -58,9 +64,9 @@ class Window:
         return Window(output)  
     def multiply(self, other):
         if isinstance(other, Window):
-            return self.copy()._multiply(other)
+            return self._multiply(other)
         else:
-            return self.copy()._scalar_multiply(other)
+            return self._scalar_multiply(other)
     def _multiply(self, other):
         # Multiplies each value by the corresponding one in another instance.
         if(self.size != other.size):
@@ -76,9 +82,9 @@ class Window:
         return self
     def add(self, other):
         if isinstance(other, Window):
-            return self.copy()._add(other)
+            return self._add(other)
         else:
-            return self.copy()._scalar_add(other)
+            return self._scalar_add(other)
     def _add(self, other):
         # Adds each value by the corresponding one in another instance.
         if(self.size != other.size):
@@ -94,20 +100,22 @@ class Window:
         return self
     def sum(self):
         # Sums the grid's contents
-        sum = 0
+        sum_grid = 0
         for i in range(self.size):
-            for j in range(self.size):
-                sum += self._grid[i][j]
-        return sum
+            sum_grid += sum(self._grid[i])
+        return sum_grid
     def avg(self):
-        return (self.sum / self.size * self.size)
+        return (self.sum() / self.size * self.size)
     def stdev(self):
-        dif = self.add(-1 * self.avg)
+        cp = self.copy()
+        dif = cp.add(-1 * cp.avg)
         return math.sqrt(dif.multiply(dif).avg())
     def get_bn(self):
-        return self.add(-1 * self.avg()).multiply(1 / math.sqrt(self.stdev() ** 2 + BN_SMOOTH))
+        cp = self.copy()
+        return cp.add(-1 * cp.avg()).multiply(1 / math.sqrt(cp.stdev() ** 2 + BN_SMOOTH))
     def bn_rescale(self, rescale, shift):
-        return self.get_bn().multiply(rescale).add(shift)
+        cp = self.copy()
+        return cp.get_bn().multiply(rescale).add(shift)
     def max(self):
         # Returns the max value in the grid
         m = self._grid[0][0]
@@ -120,7 +128,7 @@ class Window:
         location = [0, 0]
         for i in range(self.size):
             for j in range(self.size):
-                if m != max(m, self._grid[i][j]):
+                if m < max(m, self._grid[i][j]):
                     m = max(m, self._grid[i][j])
                     location = [i, j]
         return location
@@ -131,8 +139,12 @@ class Window:
             for j in range(self.size):
                 flat.append(self._grid[i][j])
         return flat       
+    def activation(self):
+        return self.ReLU()
+    def dactivation(self):
+        return self.dReLU()
     def ReLU(self):
-        return self.copy()._ReLU()
+        return self._ReLU()
     def _ReLU(self):
         # Applies the ReLU activation function to the grid.
         for i in range(self.size):
@@ -141,7 +153,7 @@ class Window:
                     self._grid[i][j] *= LEAK
         return self
     def dReLU(self):
-        return self.copy()._dReLU()
+        return self._dReLU()
     def _dReLU(self):
         # Applies the ReLU activation function to the grid.
         for i in range(self.size):
@@ -152,12 +164,16 @@ class Window:
                     self._grid[i][j] = 1
         return self
     def sigmoid(self):
-        return self.copy()._sigmoid()
+        return self._sigmoid()
     def _sigmoid(self):
         # Applies the sigmoid activation function to the grid.
         for i in range(self.size):
             for j in range(self.size):
                 self._grid[i][j] = 1 / (1 + math.e ** -self._grid[i][j])
+        return self
+    def d_sigmoid(self):
+        for i in range(self.size):
+            self._grid[i] = derived_sigmoid(self._grid[i])
         return self
     def rot180(self):
         flipped = self.copy()
@@ -210,9 +226,16 @@ class Window:
     def pad_dilate(self, pad, dilate):
         return self.dilate(dilate).pad(pad * 2)
     def unpad(self, pad_amount):
+        cpy = self.copy()
         if pad_amount > 0:
-            raise Exception("unpad not implemented yet")
-        return self.copy()
+            if pad_amount % 2 == 1:
+                cpy._grid = cpy._grid[: -1]
+                cpy._grid = [element[: -1] for element in cpy._grid]
+            for i in range(pad_amount // 2):
+                cpy._grid = cpy._grid[1: -1]
+                cpy._grid = [element[1: -1] for element in cpy._grid]
+        cpy.size -= pad_amount
+        return cpy
     def to_grid(self):
         return self.copy()._grid
 
@@ -228,3 +251,18 @@ def unflatten(flat):
             temp.append(flat[i * root + j])
         grid.append(temp)
     return Window(grid)
+
+def sigmoid(x):
+    if isinstance(x, list):
+        result = []
+        for i in range(len(x)):
+            result.append(sigmoid(x[i]))
+        return result
+    return 1 / (1 + math.e ** -x)
+def derived_sigmoid(x):
+    if isinstance(x, list):
+        result = []
+        for i in range(len(x)):
+            result.append(derived_sigmoid(x[i]))
+        return result
+    return sigmoid(x) * (1 - sigmoid(x))
