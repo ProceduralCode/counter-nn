@@ -1,6 +1,5 @@
 
 import os
-from pathlib import Path
 import numpy as np
 import cv2
 import torch
@@ -8,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from main import Dataset
 
-def show_img(img, points=None, heatmap=None):
+def show_img(img, points=None, heatmap=None, heatmap_perc=0.5):
 	img = img.copy()
 	if points is not None:
 		for x, y in points:
@@ -18,7 +17,7 @@ def show_img(img, points=None, heatmap=None):
 		heatmap = heatmap / np.max(heatmap)
 		heatmap = np.clip(heatmap, 0, 1)
 		heatmap = cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET).astype(np.float32) / 255
-		img = cv2.addWeighted(img, 1, heatmap, 0.5, 0)
+		img = cv2.addWeighted(img, 1, heatmap, heatmap_perc, 0)
 	cv2.imshow('image', img)
 	cv2.waitKey(0)
 	cv2.destroyAllWindows()
@@ -29,12 +28,27 @@ class Model(nn.Module):
 
 		self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
 		self.conv2 = nn.Conv2d(32, 32, 3, padding=1)
+		self.conv3 = nn.Conv2d(32, 32, 3, padding=1)
 		self.pool1 = nn.MaxPool2d(2)
-		self.conv3 = nn.Conv2d(32, 64, 3, padding=1)
-		self.conv4 = nn.Conv2d(64, 64, 3, padding=1)
+		self.conv4 = nn.Conv2d(32, 64, 3, padding=1)
+		self.conv5 = nn.Conv2d(64, 64, 3, padding=1)
+		self.conv6 = nn.Conv2d(64, 64, 3, padding=1)
 		self.pool2 = nn.MaxPool2d(2)
-		self.conv5 = nn.Conv2d(64, 128, 3, padding=1)
-		self.conv6 = nn.Conv2d(128, 128, 3, padding=1)
+		self.conv7 = nn.Conv2d(64, 128, 3, padding=1)
+		self.conv8 = nn.Conv2d(128, 128, 3, padding=1)
+		self.conv9 = nn.Conv2d(128, 128, 3, padding=1)
+		self.conv10 = nn.Conv2d(128, 1, 1)
+
+		# self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
+		# self.conv2 = nn.Conv2d(32, 32, 3, padding=1)
+		# self.pool1 = nn.MaxPool2d(2)
+		# self.conv3 = nn.Conv2d(32, 64, 3, padding=1)
+		# self.conv4 = nn.Conv2d(64, 64, 3, padding=1)
+		# self.pool2 = nn.MaxPool2d(2)
+		# self.conv5 = nn.Conv2d(64, 128, 3, padding=1)
+		# self.conv6 = nn.Conv2d(128, 128, 3, padding=1)
+		# self.conv7 = nn.Conv2d(128, 1, 1)
+
 		# self.up1 = nn.ConvTranspose2d(128, 64, 2, stride=2)
 		# self.conv7 = nn.Conv2d(128, 64, 3, padding=1)
 		# self.conv8 = nn.Conv2d(64, 64, 3, padding=1)
@@ -42,7 +56,6 @@ class Model(nn.Module):
 		# self.conv9 = nn.Conv2d(64, 32, 3, padding=1)
 		# self.conv10 = nn.Conv2d(32, 32, 3, padding=1)
 		# self.conv11 = nn.Conv2d(32, 1, 1)
-		self.conv7 = nn.Conv2d(128, 1, 1)
 
 		for m in self.modules():
 			if isinstance(m, nn.Conv2d):
@@ -50,13 +63,20 @@ class Model(nn.Module):
 				nn.init.zeros_(m.bias)
 
 	def forward(self, x):
-		x1 = F.relu(self.conv2(F.relu(self.conv1(x))))
-		x2 = F.relu(self.conv4(F.relu(self.conv3(self.pool1(x1)))))
-		x = F.relu(self.conv6(F.relu(self.conv5(self.pool2(x2)))))
+		x1 = F.relu(self.conv3(F.relu(self.conv2(F.relu(self.conv1(x))))))
+		x2 = F.relu(self.conv6(F.relu(self.conv5(F.relu(self.conv4(self.pool1(x1)))))))
+		x = F.relu(self.conv9(F.relu(self.conv8(F.relu(self.conv7(self.pool2(x2)))))))
+		x = self.conv10(x)
+
+		# x1 = F.relu(self.conv2(F.relu(self.conv1(x))))
+		# x2 = F.relu(self.conv4(F.relu(self.conv3(self.pool1(x1)))))
+		# x = F.relu(self.conv6(F.relu(self.conv5(self.pool2(x2)))))
+		# x = self.conv7(x)
+
 		# x = F.relu(self.conv8(F.relu(self.conv7(torch.cat([x2, self.up1(x)], dim=1)))))
 		# x = F.relu(self.conv10(F.relu(self.conv9(torch.cat([x1, self.up2(x)], dim=1)))))
 		# x = self.conv11(x)
-		x = self.conv7(x)
+
 		x = F.interpolate(x, scale_factor=4, mode='bilinear', align_corners=False)
 		return x
 
@@ -152,4 +172,6 @@ def main():
 		input = torch.from_numpy(imgs).permute(0, 3, 1, 2).to(device)
 		output = model(input)
 		output = output.detach().cpu().permute(0, 2, 3, 1).numpy()
+		show_img(imgs[0], pointss[0])
 		show_img(imgs[0], pointss[0], heatmap=output[0])
+		show_img(imgs[0], pointss[0], heatmap=output[0], heatmap_perc=1)
